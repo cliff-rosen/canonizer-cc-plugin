@@ -1,0 +1,16 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "canon-workspace-dev",
+  "description": "Local development marketplace for the canon-workspace plugin.",
+  "owner": {
+    "name": "Cliff Rosen"
+  },
+  "plugins": [
+    {
+      "name": "canon-workspace",
+      "description": "Turn a corpus of exploratory conversations into a maintained canon. Implements the discovery-to-canon synthesis discipline from 'From Conversation to Canon'.",
+      "category": "productivity",
+      "source": "./plugins/canon-workspace"
+    }
+  ]
+}

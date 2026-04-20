@@ -1,6 +1,8 @@
 # Canon Workspace — Claude Code Plugin Spec
 
-**Version:** 0.1 (v0 scope)
+**Version:** 0.3 (v0 scope)
+**Changes from 0.2:** synthesis is now delegated to a second subagent, `canon-updater` (§4.5). `/integrate-source` becomes a thin four-step orchestrator; the main agent never walks the N atomic units. See §4.2, §4.5, §4.6 (formerly §4.5), §4.7 (formerly §4.6).
+**Changes from 0.1:** extraction output is persisted to `extractions/<source_id>.json` by the `source-extractor` subagent, which returns only a short pointer rather than inline JSON. See §4.4, §6, and the addressing rules in §10.
 **Audience:** Claude Code, building this plugin
 **Source of truth for behavior:** `from-conversation-to-canon.md` (Rosen, April 2026)
 
@@ -33,6 +35,8 @@ The plugin encodes a specific anatomy:
 ├── .claude-plugin/                  # if building inside a plugin marketplace
 ├── sources/                         # immutable source corpus (read-only after capture)
 │   └── .gitkeep
+├── extractions/                     # structured per-source classifications (schema v1)
+│   └── .gitkeep                     # written only by the source-extractor subagent
 ├── synthesis.md                     # the canon — single source of truth
 ├── process.md                       # the method, inspectable and revisable
 ├── source-log.md                    # append-only log of integration events
@@ -70,25 +74,25 @@ The plugin ships six components, mapped to the primitives Claude Code supports.
 
 ### 4.2 Slash command: `/integrate-source <path>`
 
-**Purpose:** Primary operation. Runs the working loop on a single source file.
+**Purpose:** Primary operation. Runs the working loop on a single source file. The command is a **thin orchestrator** — it calls two subagents that each do their work in isolated contexts, and it reports their short pointer/summary lines to the user. The main agent never walks the N atomic units.
 
 **Behavior (the working loop, written down):**
 
-1. **Validate.** Confirm `<path>` exists and is a markdown file. Confirm `synthesis.md` and `process.md` exist.
-2. **Preserve source.** Copy the file into `sources/` with a conventional filename (e.g., `conv-NNN-<slug>.md` where NNN is the next sequential number). Do not modify content.
-3. **Delegate extraction.** Invoke the `source-extractor` subagent (§4.4) with the preserved source. It returns a structured classification (see §8).
-4. **Propose canon updates.** In the main agent, walk the classification and propose edits to `synthesis.md`:
-   - `supports` → existing canonical claims strengthened (no structural change, note in source log).
-   - `adds` → new candidate elements, added with appropriate confidence marker.
-   - `conflicts` → flagged inline with `(in flight)` markers and surfaced for human resolution. Do NOT auto-resolve.
-5. **Apply edits** to `synthesis.md` with confidence markers per §7.3.
-6. **Append to `source-log.md`** — a dated entry naming the source, summarizing what was integrated, and listing any questions retired or raised.
-7. **Retire resolved questions.** If a question in `synthesis.md`'s open-questions section is now answered, move it to the source log with note `"resolved by <source>"`.
-8. **Summarize to the user.** Report: what was added, what conflicts need human attention, what questions were retired, what uncertainty remains.
+1. **Validate.** Confirm `<path>` exists and is a markdown file. Confirm `synthesis.md`, `process.md`, and `source-log.md` exist.
+2. **Preserve source.** Copy the file into `sources/<source_id>.md` (e.g., `conv-NNN-<slug>.md` where NNN is the next sequential number). Do not modify content. The stem is the `source_id`.
+3. **Delegate extraction.** Invoke the `source-extractor` subagent (§4.4). Receive one pointer line:
+   ```
+   EXTRACTED: extractions/<source_id>.json · N units (Ss/Aa/Cc)
+   ```
+4. **Delegate canon update.** Invoke the `canon-updater` subagent (§4.5). Receive one summary line:
+   ```
+   UPDATED: synthesis.md (+Cc concepts, +Ll claims, +Aa assumptions, +Dd distinctions, +Qq questions, Ff flagged in-flight) · source-log.md (1 entry, Ss supports logged, Rr retired)
+   ```
+5. **Report to the user.** Surface the two subagent lines verbatim and point at `git diff` for review. Do not dump extraction contents. Do not commit.
 
 **Arguments:** `<path>` (required) — path to the source file.
 
-**Important:** This command does not commit to git. The human reviews and commits. The agent MAY suggest a commit message.
+**Important:** This command does not commit to git. The human reviews the canon-updater's edits via `git diff` and commits when satisfied.
 
 ### 4.3 Slash command: `/canon-review`
 
@@ -109,17 +113,23 @@ The plugin ships six components, mapped to the primitives Claude Code supports.
 
 ### 4.4 Subagent: `source-extractor`
 
-**Purpose:** Read a full source file and return a structured classification, without polluting the main agent's context with the raw source.
+**Purpose:** Read a full source file and **write** a structured classification to `extractions/<source_id>.json`, returning only a short pointer to the invoking agent. This keeps atomic-unit detail off the main agent's context entirely until the main agent explicitly decides to read it.
 
 **Why a subagent:** sources are long conversations. The main agent needs its context for synthesis judgment, not raw reading. This is context curation.
 
-**Tools:** Read only. No Write, no Edit, no Bash.
+**Tools:** `Read`, `Write`. Write is constrained by the system prompt to a single path: `extractions/<source_id>.json`.
 
-**Inputs:**
-- path to preserved source file (in `sources/`)
-- current `synthesis.md` contents (for comparison)
+**Inputs (passed by invoking agent):**
+- absolute path to preserved source file (in `sources/`)
+- absolute path to current `synthesis.md`
+- `source_id` (typically the preserved source's filename stem)
+- absolute path to the workspace root
 
-**Output:** structured classification — see §8 for schema.
+**Output (final message, ≤ one line):**
+- Success: `EXTRACTED: extractions/<source_id>.json · N units (Ss/Aa/Cc)[ · brief note]`
+- Failure: `FAILED: <reason>`
+
+The invoking agent relies on this line — and the file on disk — exclusively. The subagent does NOT return atomic units inline.
 
 **System prompt focus:**
 - Extract atomic units: concepts, claims, assumptions, distinctions, objections, questions.
@@ -128,10 +138,47 @@ The plugin ships six components, mapped to the primitives Claude Code supports.
   - `adds` — introduces something not yet in canon.
   - `conflicts` — contradicts, refines, or supersedes an existing claim.
 - Include a verbatim source fragment (≤3 sentences) for each atomic unit.
+- Write the full classification to `extractions/<source_id>.json` (schema v1, §6).
+- Do NOT write anywhere else — not to the canon, the source, the log, or drafts.
 - Do NOT propose canon edits. Classification only.
 - Do NOT attempt reconciliation. Flag conflicts; don't resolve them.
+- Do NOT return atomic units inline. Return only the pointer line.
 
-### 4.5 Skill: `canon-synthesis`
+### 4.5 Subagent: `canon-updater`
+
+**Purpose:** Apply the mechanical consequences of an extraction: incremental edits to `synthesis.md` with confidence markers, a prepended entry in `source-log.md`, and retirement of resolved open questions. Runs in an isolated context so the invoking agent never ingests per-unit detail.
+
+**Why a subagent:** walking N atomic units to propose canon updates is exactly the context-heavy work we want out of the main agent. This subagent does it; its context is discarded when it returns.
+
+**Tools:** `Read`, `Edit`, `Write`. The system prompt constrains writes to `synthesis.md` and `source-log.md` only.
+
+**Inputs (passed by invoking agent):**
+- absolute path to `extractions/<source_id>.json`
+- absolute path to `synthesis.md`
+- absolute path to `source-log.md`
+- absolute path to `process.md` (authority)
+- the `source_id`
+- absolute path to the workspace root
+
+**Output (final message, ≤ one line):**
+- Success: `UPDATED: synthesis.md (+Cc concepts, +Ll claims, +Aa assumptions, +Dd distinctions, +Qq questions, Ff flagged in-flight) · source-log.md (1 entry, Ss supports logged, Rr retired)[ · brief note]`
+- Partial (ambiguous units skipped): `PARTIAL: <same counts> · skipped: <N> ambiguous units`
+- Failure: `FAILED: <reason>`
+
+**System prompt focus:**
+- Read `process.md` first; it is authoritative over any default in the system prompt.
+- Validate the extraction's `schema` field is `"v1"`.
+- For each atomic unit:
+  - `adds` → append as a bulleted item under the section for its `kind`, prefixed `(tentative)`, suffixed with a source cite.
+  - `supports` → no structural edit; record corroboration in the source-log entry.
+  - `conflicts` → annotate the related element with an `(in flight)` note citing the conflicting unit. Never modify the existing claim.
+- Retire any open question whose anchor is referenced by an `adds` or `supports` unit in this extraction.
+- Prepend a dated source-log entry after the `---` separator at the top of `source-log.md`.
+- Do NOT touch `sources/`, `extractions/`, `drafts/`, `review/`, or git.
+- Do NOT resolve conflicts. Do NOT promote tentative claims. Do NOT paraphrase extractor text.
+- Return one short line. No unit detail, no reasoning trace.
+
+### 4.6 Skill: `canon-synthesis`
 
 **Purpose:** Auto-activating context that ensures the main agent behaves correctly during ad-hoc canon work (not just during `/integrate-source`).
 
@@ -147,7 +194,7 @@ The plugin ships six components, mapped to the primitives Claude Code supports.
 
 **Crucially,** the skill defers to `process.md` in the current workspace as the authoritative method. `process.md` can be customized per project; the skill carries the defaults.
 
-### 4.6 Hook: protect `sources/`
+### 4.7 Hook: protect `sources/`
 
 **Purpose:** Enforce the structural invariant that preserved sources are immutable.
 
@@ -226,11 +273,13 @@ When a marker is removed, the source log records the reason (`"stabilized by con
 
 ## 6. Structured hand-off schema
 
-The `source-extractor` subagent returns JSON like:
+The `source-extractor` subagent **writes** JSON to `extractions/<source_id>.json` with this shape (schema v1):
 
 ```json
 {
+  "schema": "v1",
   "source_id": "conv-007-cognitive-leverage-recap",
+  "source_path": "sources/conv-007-cognitive-leverage-recap.md",
   "extracted_at": "2026-04-19T14:30:00Z",
   "atomic_units": [
     {
@@ -261,7 +310,7 @@ The `source-extractor` subagent returns JSON like:
 
 `relates_to` is an anchor into `synthesis.md` when applicable; null for pure `adds`.
 
-This schema is the contract between the extractor and the main agent. It is also the contract future subagents (duplicate-detector, conflict-analyzer) will consume. **Do not change it casually.**
+This schema is the contract between the extractor and every downstream consumer. The `schema` field is pinned; any consumer that encounters an unknown version refuses to proceed and surfaces the mismatch. Future subagents (duplicate-detector, conflict-analyzer) will also consume it. **Do not change it casually — bump the version.**
 
 ## 7. Plugin manifest
 
@@ -284,11 +333,12 @@ Build in this order so each step is testable:
 
 1. `plugin.json` + directory skeleton.
 2. `/canon-init` — testable immediately (scaffolds a workspace).
-3. `canon-synthesis` skill — no subagent needed; test by asking Claude to discuss canon work in an initialized workspace.
+3. `canon-synthesis` skill — test by asking Claude to discuss canon work in an initialized workspace.
 4. Hook on `sources/` — test by asking Claude to edit a file in `sources/`; confirm rejection.
-5. `source-extractor` subagent — test standalone by feeding it a source and inspecting its JSON output.
-6. `/integrate-source` — integrates all of the above. Test end-to-end with one of the seven cognitive-leverage conversations as a source.
-7. `/canon-review` — last, since it's cosmetic relative to the core loop.
+5. `source-extractor` subagent — test standalone by feeding it a source; confirm it writes `extractions/<source_id>.json` and returns a pointer line.
+6. `canon-updater` subagent — test standalone by feeding it an extraction; inspect `synthesis.md` + `source-log.md` edits via `git diff`.
+7. `/integrate-source` — thin orchestrator tying §5 and §6 together. Test end-to-end with one of the seven cognitive-leverage conversations as a source.
+8. `/canon-review` — last, since it's cosmetic relative to the core loop.
 
 ## 9. Design principles to preserve through implementation
 
@@ -302,7 +352,20 @@ These are the invariants. If implementation pressure pushes against one, surface
 6. **Provenance is structural.** Every canonical element is traceable to source fragments via the source log and the preserved `sources/` directory.
 7. **Review artifacts are scaffolding.** `/canon-review` output is gitignored and disposable.
 
-## 10. Future expansion (design toward, don't build yet)
+## 10. Artifact addressing and pointer resolution
+
+Every cross-system reference uses one of four forms:
+
+| Form | Meaning | Who writes | Who reads |
+|---|---|---|---|
+| `sources/<source_id>.md` | Preserved verbatim source. Immutable after capture. | Integrator at capture time. | Subagents that need raw text. |
+| `extractions/<source_id>.json` | Structured classification (schema v1). Overwritten on re-extraction. | `source-extractor` only. | Main agent (narrow reads), downstream subagents. |
+| `synthesis.md` | The canon. | `canon-updater` via incremental edits. | Everyone. |
+| `source-log.md` | Append-only integration log. Cites extractions and sources by path. Newest-first. | `canon-updater` (prepends). | Humans, auditors. |
+
+**Resolving a pointer without flooding context.** The main agent never walks an extraction directly. Per-unit work is delegated to `canon-updater` (or, in v1+, further specialized subagents). If ad-hoc narrow reads are needed by the main agent, prefer grep by classification or Read with offset/limit — this should be rare.
+
+## 11. Future expansion (design toward, don't build yet)
 
 These are planned subagents for v1+. The v0 structure should make adding them cheap:
 

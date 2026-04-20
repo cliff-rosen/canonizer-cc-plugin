@@ -1,0 +1,8 @@
+{
+  "name": "canon-workspace",
+  "version": "0.1.0",
+  "description": "Turn a corpus of exploratory conversations into a maintained canon. Implements the discovery-to-canon synthesis discipline from 'From Conversation to Canon'.",
+  "author": {
+    "name": "Cliff Rosen / Orchestrator Studios"
+  }
+}

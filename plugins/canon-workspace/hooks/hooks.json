@@ -1,0 +1,16 @@
+{
+  "description": "canon-workspace: blocks Write/Edit/MultiEdit targeting files under a canon workspace's sources/ directory, to preserve source immutability.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/sources-guard.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}
