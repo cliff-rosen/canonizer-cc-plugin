@@ -20,18 +20,21 @@ The invoking agent will tell you:
 
 1. The absolute path to a preserved source file (typically under `sources/` in a canon workspace).
 2. The absolute path to the current `synthesis.md`.
-3. The `source_id` to use for naming the extraction file (typically the preserved source's filename without extension, e.g. `conv-007-cognitive-leverage-recap`).
-4. The absolute path to the workspace root (so you know where to write `extractions/<source_id>.json`).
+3. The absolute path to the workspace's `process.md`. **This is the authority for the kinds taxonomy.**
+4. The `source_id` to use for naming the extraction file (typically the preserved source's filename without extension, e.g. `conv-007-cognitive-leverage-recap`).
+5. The absolute path to the workspace root (so you know where to write `extractions/<source_id>.json`).
 
-If any of the four is missing or ambiguous, stop and ask — do not guess paths.
+If any of the five is missing or ambiguous, stop and ask — do not guess paths.
 
 ## What you do
 
-1. **Read the source file in full.** Do not sample. Do not skim. If the file is long, read every page. The invoking agent is delegating reading to you precisely to keep its context free for synthesis judgment.
+1. **Read `process.md` first.** Find its `## Schema` section and use the **Kinds** list there as the authoritative taxonomy for classification. The defaults listed below under step 3 are fallbacks *only* if `process.md` is absent or does not contain a `## Schema` section — in that case, proceed with the defaults and mention the missing schema in your final pointer line.
 
-2. **Read the current `synthesis.md` in full.** This is your reference for what is already canonical.
+2. **Read the source file in full.** Do not sample. Do not skim. If the file is long, read every page. The invoking agent is delegating reading to you precisely to keep its context free for synthesis judgment.
 
-3. **Extract atomic units.** An atomic unit is a single indivisible idea expressed in the source. Kinds:
+3. **Read the current `synthesis.md` in full.** This is your reference for what is already canonical.
+
+4. **Extract atomic units.** An atomic unit is a single indivisible idea expressed in the source. The kinds are defined by `process.md`'s `## Schema` section. Default kinds (used only as fallback):
    - `concept` — a named idea, frame, or object the source introduces or uses.
    - `claim` — an assertion the source makes about how something is.
    - `assumption` — something the source takes as given, whether stated or implied.
@@ -41,12 +44,12 @@ If any of the four is missing or ambiguous, stop and ask — do not guess paths.
 
    Each atomic unit must be expressible in one sentence after normalization. If it takes a paragraph, you are looking at several units fused together — separate them.
 
-4. **Classify each unit against `synthesis.md`:**
+5. **Classify each unit against `synthesis.md`:**
    - `supports` — reinforces an existing canonical element. Set `relates_to` to an anchor into `synthesis.md`.
    - `adds` — introduces something not currently in `synthesis.md`. Leave `relates_to` as `null`.
    - `conflicts` — contradicts, refines, or supersedes an existing element. Set `relates_to` to the existing element and describe the conflict neutrally in `notes` (e.g., `"Source frames X as nonlinear; canon currently says linear."`). Do NOT resolve it.
 
-5. **Capture a verbatim source fragment of ≤3 sentences** for each unit. It must be quotable directly from the source with no paraphrase.
+6. **Capture a verbatim source fragment of ≤3 sentences** for each unit. It must be quotable directly from the source with no paraphrase.
 
 ## Writing the extraction file
 
@@ -78,7 +81,7 @@ Field rules:
 - `source_path` — path relative to the workspace root.
 - `extracted_at` — ISO 8601 UTC timestamp.
 - `id` — sequential `au-1`, `au-2`, … within this extraction.
-- `kind` — one of `concept`, `claim`, `assumption`, `distinction`, `objection`, `question`.
+- `kind` — one of the kinds declared in `process.md`'s `## Schema` → Kinds section (defaults: `concept`, `claim`, `assumption`, `distinction`, `objection`, `question`).
 - `text` — your normalized one-sentence rendering.
 - `source_fragment` — verbatim quote from the source, ≤3 sentences.
 - `classification` — one of `supports`, `adds`, `conflicts`.

@@ -66,14 +66,14 @@ When a marker is removed, `source-log.md` records why.
 **The agents do:**
 - `source-extractor` extracts and classifies.
 - `canon-updater` applies mechanical updates and logs.
-- The main agent orchestrates and reports pointer lines + a pointer to `git diff`.
+- The main agent orchestrates and reports pointer lines; pointing the user at the UX for review and `git diff` for raw-change audit.
 
 **The human does:**
 - Promote tentative claims to stable.
 - Resolve `(in flight)` conflicts.
 - Directional-alignment calls.
 - Decide whether two ideas are the same, whether an assumption is still active, whether a framing is central.
-- Review every integration via `git diff` and commit.
+- Review every integration through the UX (`/canon-workspace:canon-review`); `git diff` is an audit side-channel for raw changes before commit.
 - Revise `process.md` when the method itself should change.
 
 If you find yourself about to do editorial work, stop and surface the decision.
@@ -89,7 +89,7 @@ If you find yourself about to do editorial work, stop and surface the decision.
 7. **Rewrite `synthesis.md` wholesale.** Incremental edits only.
 8. **Proceed silently on ambiguous integrations.** Skip and flag.
 9. **Collapse distinct open questions.**
-10. **Commit to git.** Human reviews `git diff` and commits.
+10. **Commit to git.** Human reviews in the UX, audits via `git diff`, and commits.
 
 ## How to work
 

@@ -1,31 +1,123 @@
 # Canon Workspace — Claude Code Plugin Spec
 
-**Version:** 0.3 (v0 scope)
-**Changes from 0.2:** synthesis is now delegated to a second subagent, `canon-updater` (§4.5). `/integrate-source` becomes a thin four-step orchestrator; the main agent never walks the N atomic units. See §4.2, §4.5, §4.6 (formerly §4.5), §4.7 (formerly §4.6).
-**Changes from 0.1:** extraction output is persisted to `extractions/<source_id>.json` by the `source-extractor` subagent, which returns only a short pointer rather than inline JSON. See §4.4, §6, and the addressing rules in §10.
+**Version:** 0.4 (v0 scope)
+**Changes from 0.3:** `process.md` gains an authoritative `## Schema` section (Kinds, Sections, Classification rules, Display conventions). Subagents read it on every invocation and defer to it; hardcoded lists in the subagent prompts are fallbacks only. This is the foundation for schema + UX co-evolution — see `docs/build-plan.md` Phases 1–8.
+**Changes from 0.2:** synthesis is delegated to a second subagent, `canon-updater` (§4.5). `/integrate-source` becomes a thin four-step orchestrator; the main agent never walks the N atomic units.
+**Changes from 0.1:** extraction output is persisted to `extractions/<source_id>.json` by the `source-extractor` subagent, which returns only a short pointer rather than inline JSON.
 **Audience:** Claude Code, building this plugin
 **Source of truth for behavior:** `from-conversation-to-canon.md` (Rosen, April 2026)
 
 ---
 
-## 1. Purpose
+## 1. Overview
 
-Package the discovery-to-canon synthesis discipline described in *From Conversation to Canon* into an installable Claude Code plugin, so the workflow can be reproduced on a new effort without reconstructing the discipline from scratch.
+A Claude Code plugin that packages a discipline: turning a corpus of exploratory conversations into a maintained canonical artifact. A canon workspace is a git-backed directory with a fixed anatomy — immutable `sources/`, structured `extractions/`, a living `synthesis.md`, an append-only `source-log.md`, and a `process.md` that states the method *and* carries the authoritative schema of the canon.
 
-The plugin encodes a specific anatomy:
+The plugin does not impose a schema. It ships a small set of default schema templates and enters a collaboration with the user at initialization to choose or customize one. Every subagent reads `process.md`'s schema on every invocation — the canon's shape is a product of dialog, not a hardcoded assumption.
 
-- a canon separate from the corpus
-- an explicit synthesis pipeline (extract → normalize → dedupe → reconcile → canonicalize → trace)
-- confidence markers as a first-class concept
-- provenance via source preservation and a source log
-- a division of labor that keeps editorial judgment with the human
-- scaffolding for directional-alignment review passes
+### Who it's for
+
+Anyone who has spent weeks or months exploring a topic across many long conversations and wants the thinking to converge into an inspectable, reusable structure — the kind downstream artifacts (a proposal, a thesis, a product spec) are drawn from. The canon *is* that structure; the workspace is where it lives.
+
+### One-time setup — the schema sync-up
+
+This is where the collaboration begins. The user is introduced to the notion of a schema, picks one that fits, and commits to it (for now — schema is revisable later).
+
+1. **User action:** runs `/canon-workspace:canon-init` in a fresh directory.
+2. **Main agent action:** scaffolds the workspace (directories, `synthesis.md`, `process.md`, `source-log.md`, `schema-log.md`, `.gitignore`, initial git commit).
+3. **Main agent action:** presents the default schema templates — each with a short description of what it's suited for. Examples the plugin ships (illustrative; final set TBD):
+   - **Framework development** — concepts, claims, assumptions, distinctions, objections, questions.
+   - **Research synthesis** — hypotheses, findings, methods, limitations, open questions.
+   - **Product discovery** — user needs, features, constraints, risks, open questions.
+   - **Thesis argumentation** — arguments, evidence, counter-arguments, open questions.
+4. **User choice:** accept the selected default, replace with a provided alternative, or collaborate with the agent to draft a custom schema from scratch.
+5. **Main agent action:** writes the agreed schema into `process.md`'s `## Schema` section, generates `synthesis.md`'s section headers from it, and records the event in `schema-log.md` as entry #1.
+
+The schema defines:
+- **Kinds** — the atomic-unit taxonomy (varies by template).
+- **Sections** — how those kinds are organized in `synthesis.md`.
+- **Classification rules** — how atomic units become canon entries with confidence markers.
+- **Display conventions** — how the canon renders in the review projection.
+
+### The working loop — add, review, refine
+
+For each new source, the loop has three steps. It may iterate (add several sources, review the accumulated canon, refine across them) before committing.
+
+#### Step 1 — Add
+
+1. **User action:** exports a source transcript as markdown; runs `/canon-workspace:integrate-source <path>`.
+2. **Main agent action:** validates inputs; copies the source to `sources/<source_id>.md`. From here `sources/` is immutable, enforced by a `PreToolUse` hook.
+3. **Main agent action (subagent dispatch):** invokes the `source-extractor` subagent with paths to the preserved source, `synthesis.md`, `process.md`, the `source_id`, and the workspace root. The subagent (tools: `Read`, `Write` scoped to `extractions/<source_id>.json`) reads source + canon + schema in its own context, writes the extraction file, and returns a single pointer line: `EXTRACTED: extractions/<source_id>.json · N units (Ss/Aa/Cc)`.
+4. **Main agent action (subagent dispatch):** invokes the `canon-updater` subagent with the extraction path plus `synthesis.md`, `source-log.md`, `process.md`, `source_id`, and workspace root. The subagent (tools: `Read`, `Edit`, `Write` scoped to `synthesis.md` + `source-log.md`) reads the extraction and schema, applies incremental edits to `synthesis.md` with confidence markers, prepends a dated entry to `source-log.md`, and returns a single summary line: `UPDATED: synthesis.md (…) · source-log.md (…)`.
+5. **Main agent action:** reports the two pointer lines to the user and directs them to run `/canon-workspace:canon-review`.
+
+No atomic-unit detail passes through the main agent's context. All per-unit work happens in the two subagents' disposable contexts.
+
+#### Step 2 — Review
+
+1. **User action:** runs `/canon-workspace:canon-review`.
+2. **Main agent action:** generates the **review projection** — an HTML render at `review/review-<timestamp>.html`. The render applies the Display conventions from `process.md`: confidence markers visually distinct (tentative soft, in-flight urgent); every canonical element clickable through to its provenance (source-log entry → extraction → source fragment); open questions isolated from claims; schema-fit observations from the subagents surfaced in a sidebar. The file is disposable (gitignored).
+3. **User action:** opens the HTML in a browser. Reads. Forms judgments.
+
+The review projection is where editorial work and schema/UX feedback originate. It is the primary review surface. `git diff` is an audit side-channel for inspecting raw changes before commit; it is not the review surface.
+
+#### Step 3 — Refine
+
+Based on what the review shows, the human refines *both* the synthesis content *and* the schema/UX themselves. Refinements:
+
+- **Promote `(tentative)` claims to unmarked.** User directs the main agent to edit `synthesis.md`, or edits directly. Each removal is logged in `source-log.md` with a reason.
+- **Resolve `(in flight)` conflicts.** User decides; main agent applies the decision; `source-log.md` records it.
+- **Retire or merge open questions.**
+- **Evolve the schema.** User action: `/canon-workspace:evolve-schema <intent>` (or a dialog). Main agent drafts edits to `process.md`'s `## Schema` section plus a migration plan for `synthesis.md`. User reviews and accepts. Entry added to `schema-log.md`. Subagents honor the new schema on their next invocation.
+- **Evolve the UX.** User action: `/canon-workspace:evolve-ux <intent>` (or a dialog). Main agent (via a renderer-editor subagent) edits the renderer while preserving alignment invariants.
+
+Refinements complete when the user is satisfied with this pass.
+
+#### Step 4 — Commit
+
+User commits via git. Nothing auto-commits.
+
+### Projections of the canon
+
+`synthesis.md` is the storage format. It is not the consumption format. The plugin generates projections on demand:
+
+- **Review projection** — `/canon-workspace:canon-review` → `review/review-<timestamp>.html`. Geared for editorial work. Markers are loud; provenance is one click away; schema-fit observations are surfaced; disposable.
+- **Consumption projection** — `/canon-workspace:canon-export <format>` (planned, post-v0) → a clean rendering for downstream use (proposal, thesis, onboarding doc). Markers stripped; organized for a reader; optionally scoped to a subset of sections or sources.
+
+Both are derived from `synthesis.md` + `process.md`'s Schema and Display conventions. The review projection additionally consumes `source-log.md` and `extractions/` for provenance rendering.
+
+### What is built today vs planned
+
+**Built (v0.4):**
+- `/canon-workspace:canon-init` — simple scaffold (schema-negotiation dialog is a Phase 2 upgrade).
+- `source-extractor` and `canon-updater` subagents — schema-aware as of Phase 1; both defer to `process.md`'s `## Schema`.
+- `canon-synthesis` skill — carries the discipline defaults and defers to `process.md`.
+- `PreToolUse` hook — enforces `sources/` immutability.
+
+**Planned** (see `docs/build-plan.md` for phase-by-phase detail):
+- Schema negotiation dialog at init, with multiple default templates (Phase 2).
+- Subagent schema-fit feedback channel (Phase 3).
+- `/canon-workspace:integrate-source` thin orchestrator (Phase 4).
+- Default renderer and `/canon-workspace:canon-review` (Phase 5).
+- Schema ↔ UX alignment rules (Phase 6).
+- `/canon-workspace:evolve-schema` and `/canon-workspace:evolve-ux` (Phases 7–8).
+
+**Post-v0:** consumption projection (`/canon-workspace:canon-export`); duplicate-detector and other synthesis subagents (§11).
+
+### Invariants summarized
+
+- Canon ≠ corpus. Sources are frozen (hook).
+- Provenance is addressable: every canonical element walks back to its verbatim fragment via `source-log.md` → `extractions/<id>.json` → `sources/<id>.md`.
+- Schema is authoritative in `process.md`. Subagents read it every invocation.
+- Mechanical work for agents, editorial work for humans. Editorial judgment surfaces in the review projection.
+- Context curation by delegation. The main agent stays thin; per-unit work happens in subagent contexts that are discarded after use.
 
 ## 2. Non-goals (for v0)
 
-- Not a full synthesis UI. The review artifact is deliberately throwaway HTML.
+- Not a full synthesis *editor*. The review projection is HTML and disposable — designed to inform editorial judgment, not execute it. Edits flow back through commands/dialog, not in-page manipulation.
+- Not a consumption rendering pipeline. A polished consumption projection (`canon-export`, §11) is planned post-v0.
 - Not a multi-user collaboration system. Single-user, git-backed.
-- Not automating judgment calls (promotion, reconciliation, directional alignment). Those remain human decisions.
+- Not automating judgment calls (promotion, reconciliation, directional alignment, schema decisions). Those remain human.
 - Not an ingestion pipeline for arbitrary formats. Sources are markdown files captured into `sources/`.
 
 ## 3. Workspace layout (what `/canon-init` creates)
@@ -92,7 +184,7 @@ The plugin ships six components, mapped to the primitives Claude Code supports.
 
 **Arguments:** `<path>` (required) — path to the source file.
 
-**Important:** This command does not commit to git. The human reviews the canon-updater's edits via `git diff` and commits when satisfied.
+**Important:** This command does not commit to git. The human reviews through the UX (rendered via `/canon-review`) — the surface where editorial judgment happens — and uses `git diff` as a raw-changes audit before committing.
 
 ### 4.3 Slash command: `/canon-review`
 
@@ -122,6 +214,7 @@ The plugin ships six components, mapped to the primitives Claude Code supports.
 **Inputs (passed by invoking agent):**
 - absolute path to preserved source file (in `sources/`)
 - absolute path to current `synthesis.md`
+- absolute path to `process.md` (schema authority)
 - `source_id` (typically the preserved source's filename stem)
 - absolute path to the workspace root
 
@@ -132,7 +225,8 @@ The plugin ships six components, mapped to the primitives Claude Code supports.
 The invoking agent relies on this line — and the file on disk — exclusively. The subagent does NOT return atomic units inline.
 
 **System prompt focus:**
-- Extract atomic units: concepts, claims, assumptions, distinctions, objections, questions.
+- Read `process.md` first; the `## Schema` section's **Kinds** list is authoritative. Defaults below are fallbacks when the section is absent.
+- Extract atomic units per the kinds defined in the schema (defaults: concepts, claims, assumptions, distinctions, objections, questions).
 - For each atomic unit, classify against current canon:
   - `supports` — reinforces an existing canonical claim.
   - `adds` — introduces something not yet in canon.
@@ -166,7 +260,7 @@ The invoking agent relies on this line — and the file on disk — exclusively.
 - Failure: `FAILED: <reason>`
 
 **System prompt focus:**
-- Read `process.md` first; it is authoritative over any default in the system prompt.
+- Read `process.md` first; its `## Schema` section is authoritative for kinds, sections, classification rules, and the section mapping. Hardcoded fallback table in the subagent prompt applies only if the schema section is missing.
 - Validate the extraction's `schema` field is `"v1"`.
 - For each atomic unit:
   - `adds` → append as a bulleted item under the section for its `kind`, prefixed `(tentative)`, suffixed with a source cite.
@@ -187,12 +281,13 @@ The invoking agent relies on this line — and the file on disk — exclusively.
 **Activation description** (for the skill's frontmatter): activate when the conversation involves working on a canon workspace — detected by the presence of `synthesis.md` and `process.md` in the project root, or when the user discusses canon, synthesis, confidence markers, or the working loop.
 
 **Content:** the skill teaches the *discipline*, not a single procedure:
-- the six synthesis operations (extract, normalize, dedupe, reconcile, canonicalize, trace)
+- the two-subagent flow (`source-extractor` + `canon-updater`)
+- artifact addressing and pointer resolution
 - confidence marker conventions (§7.3)
 - the anti-patterns (§7.4) — specifically what the agent must NOT do
-- the division of labor: mechanical work for the agent, editorial judgment for the human
+- the division of labor: mechanical work for the agents, editorial judgment for the human
 
-**Crucially,** the skill defers to `process.md` in the current workspace as the authoritative method. `process.md` can be customized per project; the skill carries the defaults.
+**Crucially,** the skill defers to `process.md` in the current workspace as the authoritative method. In particular, `process.md`'s `## Schema` section is authoritative for kinds, sections, classification rules, and display conventions. The skill carries defaults; `process.md` overrides.
 
 ### 4.7 Hook: protect `sources/`
 
@@ -208,6 +303,8 @@ The invoking agent relies on this line — and the file on disk — exclusively.
 
 ### 7.1 `synthesis.md` initial template
 
+Matches the sections declared by the default schema in `process.md`. If the user customizes the schema at init (forthcoming in `docs/build-plan.md` Phase 2), `synthesis.md` is generated to match.
+
 ```markdown
 # Canon
 
@@ -222,6 +319,10 @@ The invoking agent relies on this line — and the file on disk — exclusively.
 <empty — populated via integration>
 
 ## Claims
+
+<empty — populated via integration>
+
+## Assumptions
 
 <empty — populated via integration>
 
@@ -244,6 +345,7 @@ The template encodes:
 
 - **Purpose** of the canon for this effort (user fills in).
 - **The seven principles** from *From Conversation to Canon* Part 3.
+- **Schema** — the authoritative structure: Kinds (atomic unit taxonomy), Sections (canon structure), Classification rules, Display conventions. Subagents read this on every invocation.
 - **The working loop** as a numbered procedure (matches §4.2).
 - **Confidence markers** (§7.3 below).
 - **Anti-patterns** (§7.4 below).
@@ -346,11 +448,12 @@ These are the invariants. If implementation pressure pushes against one, surface
 
 1. **The canon is separate from the corpus.** Sources are inputs; `synthesis.md` is the product.
 2. **Structured hand-offs, not prose.** Subagent outputs are parseable data, not narratives.
-3. **`process.md` is the orchestration spec.** The working loop in `process.md` matches the steps in `/integrate-source`. If they diverge, `process.md` is authoritative and the command is a bug.
+3. **`process.md` is the orchestration spec AND the schema authority.** The working loop in `process.md` matches `/integrate-source`'s steps; the `## Schema` section governs subagent classification and placement behavior. If either diverges, `process.md` wins and the code is a bug.
 4. **One skill for discipline, many subagents for operations.** Don't split the skill by operation. Do split subagents by operation as the pipeline grows.
 5. **Mechanical work for the agent, editorial work for the human.** Any behavior the agent exhibits that requires editorial judgment is a bug.
 6. **Provenance is structural.** Every canonical element is traceable to source fragments via the source log and the preserved `sources/` directory.
 7. **Review artifacts are scaffolding.** `/canon-review` output is gitignored and disposable.
+8. **Schema and UX co-evolve in dialog with the user.** The canon's structure is a product of the effort, not a fixed template. Schema evolution, schema-fit feedback, and UX shaping are first-class operations (see `docs/build-plan.md` Phases 2–8).
 
 ## 10. Artifact addressing and pointer resolution
 
