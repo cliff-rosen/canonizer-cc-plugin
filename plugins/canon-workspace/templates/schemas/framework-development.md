@@ -1,12 +1,18 @@
 ---
 name: framework-development
 title: Framework development
-description: Developing a conceptual framework from exploratory conversations — finding the right vocabulary, distinctions, and claims. Use this when the effort is about hardening a way of thinking about something.
+description: Developing a conceptual framework from exploratory conversations — finding the right vocabulary, distinctions, and claims. Converges on a named framework: 3–5 central concepts that organize the vocabulary, with everything else hanging off them. Use when the effort is about hardening a way of thinking about something.
 ---
 
 ## Schema
 
 This section is the authoritative record of the canon's shape. Subagents read it on every invocation and defer to it; any hardcoded defaults in their system prompts are fallbacks, never overrides. When the schema changes here, subagents pick it up next invocation.
+
+### Convergence target
+
+This canon converges on a **named conceptual framework**. The finished state has 3–5 central concepts in `## Core structure`, each with a one-sentence gloss, such that the concepts/claims/distinctions/assumptions in the sections below hang off them. A reader new to the material can describe the framework in one paragraph.
+
+*Done is not "every claim is corroborated."* Done is "the central concepts are named, stable, and the rest of the canon is legibly organized beneath them." A well-classified laundry list is not done.
 
 ### Kinds (atomic unit taxonomy)
 
@@ -24,6 +30,7 @@ Each atomic unit extracted from a source is classified as one of these kinds:
 `synthesis.md` has these sections, in this order:
 
 - **Overview** — one-paragraph statement of what this canon represents. Populated by the human; not touched by subagents.
+- **Core structure** — the few load-bearing pieces that organize the rest of the canon. A small named set (typically 3–7 elements), each a one-sentence gloss. Populated by the human; `source-extractor` proposes candidates via the extraction JSON and `canon-updater` surfaces them for human promotion. Subagents never write here directly.
 - **Core concepts** — receives units of kind `concept`.
 - **Claims** — receives units of kind `claim`.
 - **Assumptions** — receives units of kind `assumption`.

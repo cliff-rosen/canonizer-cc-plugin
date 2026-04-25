@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Canon Review</title>
+<style>
+  :root {
+    --color-body: #1f2328;
+    --color-muted: #6a737d;
+    --color-accent: #0969da;
+    --color-tentative: #9a6700;
+    --color-tentative-bg: #fff8c5;
+    --color-in-flight: #b42318;
+    --color-in-flight-bg: #fef0ef;
+    --color-heading: #111;
+    --color-border: #d0d7de;
+    --color-muted-bg: #f6f8fa;
+    --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, "Cascadia Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: var(--font-main);
+    color: var(--color-body);
+    margin: 0;
+    line-height: 1.55;
+    font-size: 15px;
+  }
+  header {
+    padding: 1.5rem 2rem;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-muted-bg);
+  }
+  header h1 {
+    margin: 0 0 0.5rem;
+    color: var(--color-heading);
+    font-size: 1.6rem;
+  }
+  header .meta {
+    color: var(--color-muted);
+    font-size: 0.85rem;
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 2.5rem;
+    padding: 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  main { min-width: 0; }
+  aside {
+    border-left: 1px solid var(--color-border);
+    padding-left: 1.5rem;
+    font-size: 0.9rem;
+  }
+  aside section { margin-bottom: 2rem; }
+  aside h3 {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-muted);
+    margin: 0 0 0.75rem;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+  main h1 {
+    color: var(--color-heading);
+    font-size: 1.5rem;
+    margin: 0 0 1rem;
+  }
+  main h2 {
+    color: var(--color-heading);
+    font-size: 1.2rem;
+    margin: 2rem 0 0.5rem;
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+  main h3 {
+    color: var(--color-heading);
+    font-size: 1.02rem;
+    margin: 1.5rem 0 0.4rem;
+  }
+  ul { padding-left: 1.25rem; margin: 0.4rem 0; }
+  li { margin: 0.3rem 0; }
+  li ul { margin-top: 0.3rem; }
+  p { margin: 0.6rem 0; }
+  code {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    background: var(--color-muted-bg);
+    padding: 0.1em 0.35em;
+    border-radius: 4px;
+  }
+  em { font-style: italic; }
+  strong { font-weight: 600; }
+  .tentative {
+    color: var(--color-tentative);
+    background: var(--color-tentative-bg);
+    padding: 0.05em 0.35em;
+    border-radius: 3px;
+    font-weight: 500;
+    font-size: 0.9em;
+  }
+  .in-flight {
+    color: var(--color-in-flight);
+    background: var(--color-in-flight-bg);
+    padding: 0.05em 0.35em;
+    border-radius: 3px;
+    font-weight: 600;
+    font-size: 0.9em;
+  }
+  .legend {
+    margin-top: 3rem;
+    padding: 1rem 1.25rem;
+    background: var(--color-muted-bg);
+    border-radius: 6px;
+    font-size: 0.85rem;
+    color: var(--color-muted);
+    line-height: 1.8;
+  }
+  .legend strong { color: var(--color-body); }
+  aside #open-questions-body ul {
+    padding-left: 1rem;
+  }
+  aside .empty {
+    color: var(--color-muted);
+    font-style: italic;
+    font-size: 0.88rem;
+  }
+  .cite {
+    font-family: var(--font-mono);
+    font-size: 0.72em;
+    color: var(--color-muted);
+    opacity: 0;
+    margin-left: 0.4em;
+    transition: opacity 0.15s;
+    cursor: help;
+    user-select: none;
+    white-space: nowrap;
+  }
+  li:hover > .cite,
+  p:hover > .cite { opacity: 0.55; }
+  .cite:hover { opacity: 1; color: var(--color-accent); }
+
+  /* "Just arrived" banner + highlight for the most-recent integration */
+  #change-banner {
+    display: none;
+    margin: 0 0 1.5rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--color-accent);
+    background: #f0f7ff;
+    border-radius: 6px;
+    font-size: 0.88rem;
+    line-height: 1.7;
+  }
+  #change-banner strong { color: var(--color-accent); }
+  #change-banner code {
+    background: white;
+    border: 1px solid var(--color-border);
+  }
+  #change-banner .pill {
+    display: inline-block;
+    padding: 0.1rem 0.55rem;
+    margin: 0 0.1rem;
+    background: white;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    color: var(--color-body);
+    text-decoration: none;
+    font-size: 0.82rem;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  #change-banner .pill:hover {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: white;
+  }
+  #change-banner .count {
+    color: var(--color-muted);
+    margin: 0 0.5rem;
+  }
+  li.just-added {
+    background: #f0f7ff;
+    border-left: 3px solid var(--color-accent);
+    padding: 0.15rem 0.5rem;
+    margin-left: -0.75rem;
+    border-radius: 0 3px 3px 0;
+    list-style-position: inside;
+  }
+  li.just-added > .cite { opacity: 0.45; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">Canon Review</h1>
+  <div class="meta">
+    <span id="schema-name"></span>
+    <span id="timestamp"></span>
+    <span id="last-updated"></span>
+  </div>
+</header>
+
+<div class="layout">
+  <main>
+    <div id="change-banner"></div>
+    <div id="canon-body"></div>
+    <div class="legend">
+      <strong>Legend:</strong>
+      &nbsp;<span class="tentative">(tentative)</span> candidate, awaiting corroboration
+      &nbsp;·&nbsp;
+      <span class="in-flight">(in flight)</span> conflict surfaced, awaiting human resolution
+      &nbsp;·&nbsp;
+      unmarked — stable (human-promoted)
+    </div>
+  </main>
+  <aside>
+    <section>
+      <h3>Open questions</h3>
+      <div id="open-questions-body"></div>
+    </section>
+    <section>
+      <h3>Schema events</h3>
+      <div id="schema-log-body"></div>
+    </section>
+    <section>
+      <h3>Recent integrations</h3>
+      <div id="source-log-body"></div>
+    </section>
+  </aside>
+</div>
+
+<script type="application/json" id="canon-data">
+{{CANON_DATA_JSON}}
+</script>
+
+<script>
+(function() {
+  const escapeHtml = (s) => s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
+  const inlineMd = (line) => {
+    let s = escapeHtml(line);
+    s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+    s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
+    s = s.replace(/\(tentative\)/g, '<span class="tentative">(tentative)</span>');
+    s = s.replace(/\(in flight\)/g, '<span class="in-flight">(in flight)</span>');
+    s = s.replace(
+      /\s+—\s+(conv-(\d+)-[A-Za-z0-9-]+)#au-([A-Za-z0-9-]+)\s*$/,
+      ' <span class="cite" title="$1#au-$3">[$2·$3]</span>'
+    );
+    return s;
+  };
+
+  const renderMarkdown = (md) => {
+    if (!md || !md.trim()) return '';
+    const lines = md.split('\n');
+    let html = '';
+    let inList = false;
+    let para = [];
+
+    const flushPara = () => {
+      if (para.length) {
+        html += '<p>' + para.map(inlineMd).join(' ') + '</p>';
+        para = [];
+      }
+    };
+    const closeList = () => {
+      if (inList) { html += '</ul>'; inList = false; }
+    };
+
+    for (const raw of lines) {
+      const line = raw;
+      if (!line.trim()) { flushPara(); closeList(); continue; }
+
+      let m;
+      if ((m = line.match(/^#\s+(.+)$/))) {
+        flushPara(); closeList();
+        html += '<h1>' + inlineMd(m[1]) + '</h1>';
+      } else if ((m = line.match(/^##\s+(.+)$/))) {
+        flushPara(); closeList();
+        const h2title = m[1];
+        const h2id = 'sec-' + h2title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+        html += '<h2 id="' + h2id + '">' + inlineMd(h2title) + '</h2>';
+      } else if ((m = line.match(/^###\s+(.+)$/))) {
+        flushPara(); closeList();
+        html += '<h3>' + inlineMd(m[1]) + '</h3>';
+      } else if ((m = line.match(/^\s*---\s*$/))) {
+        flushPara(); closeList();
+        html += '<hr>';
+      } else if ((m = line.match(/^(\s*)-\s+(.+)$/))) {
+        flushPara();
+        if (!inList) { html += '<ul>'; inList = true; }
+        html += '<li>' + inlineMd(m[2]) + '</li>';
+      } else {
+        if (inList && !/^\s/.test(line)) closeList();
+        para.push(line.trim());
+      }
+    }
+    flushPara(); closeList();
+    return html;
+  };
+
+  const extractSection = (md, heading) => {
+    if (!md) return '';
+    const lines = md.split('\n');
+    const re = new RegExp('^##\\s+' + heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*$', 'i');
+    let inSection = false;
+    const out = [];
+    for (const line of lines) {
+      if (re.test(line)) { inSection = true; continue; }
+      if (inSection && /^##\s+/.test(line)) break;
+      if (inSection) out.push(line);
+    }
+    return out.join('\n').trim();
+  };
+
+  const setEmpty = (el, md) => {
+    if (md && md.trim()) el.innerHTML = renderMarkdown(md);
+    else el.innerHTML = '<p class="empty">None.</p>';
+  };
+
+  const data = JSON.parse(document.getElementById('canon-data').textContent);
+
+  const titleMatch = data.synthesis_md ? data.synthesis_md.match(/^#\s+(.+)$/m) : null;
+  document.getElementById('title').textContent = titleMatch ? titleMatch[1] + ' — Review' : 'Canon Review';
+
+  document.getElementById('schema-name').textContent = 'Schema: ' + (data.schema_name || 'custom');
+  document.getElementById('timestamp').textContent = 'Rendered ' + (data.rendered_at || '');
+  document.getElementById('last-updated').textContent = data.last_updated ? 'Canon updated ' + data.last_updated : '';
+
+  document.getElementById('canon-body').innerHTML = renderMarkdown(data.synthesis_md || '');
+
+  const oqMd = extractSection(data.synthesis_md || '', 'Open questions');
+  setEmpty(document.getElementById('open-questions-body'), oqMd);
+
+  setEmpty(document.getElementById('schema-log-body'), data.schema_log_md || '');
+  setEmpty(document.getElementById('source-log-body'), data.source_log_md || '');
+
+  // --- "Just arrived" overlay: highlight bullets from the most-recent integration ---
+  const mostRecentSourceId = (() => {
+    if (!data.source_log_md) return null;
+    const m = data.source_log_md.match(/^##\s+\S+\s+—\s+(conv-\d+-[A-Za-z0-9-]+)/m);
+    return m ? m[1] : null;
+  })();
+
+  if (mostRecentSourceId) {
+    const canonBody = document.getElementById('canon-body');
+    const cites = canonBody.querySelectorAll('.cite');
+    const countsBySection = {};
+    const sectionIds = {};
+
+    cites.forEach(c => {
+      const title = c.getAttribute('title') || '';
+      if (!title.startsWith(mostRecentSourceId + '#')) return;
+      const li = c.closest('li');
+      if (!li) return;
+      li.classList.add('just-added');
+
+      // Find enclosing <h2> by walking backward from the <ul>
+      const ul = li.closest('ul');
+      let prev = ul ? ul.previousElementSibling : null;
+      while (prev && prev.tagName !== 'H2') prev = prev.previousElementSibling;
+      if (prev) {
+        const sec = prev.textContent.trim();
+        countsBySection[sec] = (countsBySection[sec] || 0) + 1;
+        sectionIds[sec] = prev.id;
+      }
+    });
+
+    const total = Object.values(countsBySection).reduce((a, b) => a + b, 0);
+    if (total > 0) {
+      const banner = document.getElementById('change-banner');
+      const parts = [];
+      parts.push('<strong>Just integrated:</strong> <code>' + escapeHtml(mostRecentSourceId) + '</code>');
+      parts.push('<span class="count">' + total + ' unit' + (total === 1 ? '' : 's') + '</span>');
+      for (const [sec, n] of Object.entries(countsBySection)) {
+        const id = sectionIds[sec];
+        parts.push('<a class="pill" href="#' + id + '">' + escapeHtml(sec) + ' (' + n + ')</a>');
+      }
+      banner.innerHTML = parts.join(' ');
+      banner.style.display = 'block';
+    }
+  }
+})();
+</script>
+</body>
+</html>

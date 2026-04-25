@@ -1,12 +1,18 @@
 ---
 name: research-synthesis
 title: Research synthesis
-description: Synthesizing findings from research-oriented conversations — distilling what has been learned about a question, what methods produced those findings, and what limits apply. Use this when the effort is investigative, evidence-oriented, or empirical.
+description: Synthesizing findings from research-oriented conversations — distilling what has been learned about a question, what methods produced those findings, and what limits apply. Converges on a small set of principal findings bounded by methods and limitations. Use when the effort is investigative, evidence-oriented, or empirical.
 ---
 
 ## Schema
 
 This section is the authoritative record of the canon's shape. Subagents read it on every invocation and defer to it; any hardcoded defaults in their system prompts are fallbacks, never overrides. When the schema changes here, subagents pick it up next invocation.
+
+### Convergence target
+
+This canon converges on **a small set of principal findings bounded by methods and limitations**. The finished state has 1–3 principal findings (or the overarching hypothesis being tested) in `## Core structure`, each with a one-sentence gloss and a pointer to the methods that produced it. A reader knows what's been learned, how, and what the evidence doesn't yet support.
+
+*Done is not "every finding is logged."* Done is "the principal findings are named, the methods that establish them are reachable, and the limitations that bound them are explicit." Exhaustive findings without a named spine is filing, not synthesis.
 
 ### Kinds (atomic unit taxonomy)
 
@@ -23,6 +29,7 @@ Each atomic unit extracted from a source is classified as one of these kinds:
 `synthesis.md` has these sections, in this order:
 
 - **Overview** — one-paragraph statement of what this canon represents. Populated by the human; not touched by subagents.
+- **Core structure** — the few load-bearing pieces that organize the rest of the canon. A small named set (typically 3–7 elements), each a one-sentence gloss. Populated by the human; `source-extractor` proposes candidates via the extraction JSON and `canon-updater` surfaces them for human promotion. Subagents never write here directly.
 - **Hypotheses** — receives units of kind `hypothesis`.
 - **Findings** — receives units of kind `finding`.
 - **Methods** — receives units of kind `method`.

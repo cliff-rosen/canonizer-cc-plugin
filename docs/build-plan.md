@@ -110,10 +110,12 @@
   - Provenance (source-log entry) is reachable from every canonical element in one click.
   - Open questions are isolated from claims visually.
   - Unknown section types get a default treatment rather than being dropped.
+  - **Differential rendering** — when a render is generated following a new integration, the template surfaces what was added/changed in the latest integration: per-bullet badges (e.g., a compact `+conv-N` tag), a "What's new since conv-N-1" sidebar panel, or equivalent. The data is already present in every bullet's source cite (`— conv-NNN-slug#au-X`) and in the top entry of `source-log.md`. Interim measure (pre-Phase-6): the main agent narrates the diff in chat after every post-integration `/canon-review` — see the `canon-synthesis` skill's "Diff narration" subsection.
 - Renderer consults the rules; gracefully handles schema additions without code edits.
 
 **Tests:**
 - Add a new section type in `process.md` Schema. Re-render. Confirm the new section appears with default treatment and no manual renderer code change.
+- Integrate a second source. Re-render. Confirm per-bullet integration badges appear on newly-added bullets, and a "What's new" summary panel is present.
 
 **Depends on:** Phase 5.
 
@@ -139,21 +141,79 @@
 
 ---
 
-### Phase 8 — UX evolution loop
+### Phase 8 — UX evolution loop (with workspace-override layer)
 
-**Deliverable:** the user can shape the UX in dialog; an agent edits the renderer while preserving alignment rules.
+**Deliverable:** the user can shape the UX in dialog; an agent edits the renderer at the **workspace** level (not the plugin level) while preserving alignment rules.
 
 **Scope:**
+- **Two-layer renderer composition.** Plugin ships defaults at `plugins/canon-workspace/renderer/`. Workspaces carry overrides at `.canon/renderer/` (or equivalent). `canon-renderer` composes workspace-over-plugin at render time: any file present in the workspace layer replaces the plugin default for that workspace only.
+- **UX evolution writes to the workspace layer.** `/canon-workspace:evolve-ux` (and any dialog-driven UX edits) land in the workspace's override dir. Edits to plugin defaults are a separate, explicit act (not the default behavior).
 - After seeing a render, the user expresses UX preferences in conversation.
-- An agent (possibly a dedicated `renderer-editor` subagent) edits files under `plugins/canon-workspace/renderer/`.
-- Alignment rules enforced: an edit that breaks a rule is refused with explanation.
+- An agent (possibly a dedicated `renderer-editor` subagent) edits the workspace override files.
+- Alignment rules (Phase 6) enforced on the composed output.
 - Changes logged — decide in-phase whether in `schema-log.md` or a separate `ux-log.md`.
 - Re-render confirms result.
 
 **Tests:**
-- Ask for a visual change ("move open questions to a bottom panel"; "compact marker rendering"); confirm renderer edits, alignment rules still satisfied, re-render reflects change.
+- Ask for a visual change ("move open questions to a bottom panel"; "compact marker rendering") in a workspace. Confirm the override lands in `.canon/renderer/` in that workspace, not in the plugin. Re-render in the same workspace reflects the change.
+- Create a second workspace. Render it. Confirm it still uses plugin defaults (no leakage from the first workspace's override).
+- Break an alignment rule via a proposed override; confirm the agent refuses with an explanation.
 
 **Depends on:** Phase 6.
+
+**Context.** Pre-Phase-8, UX edits silently write to the plugin directory, propagating across all workspaces on the machine. See `docs/design-notes.md` → "UX customization edits shared plugin infrastructure (flaw)" for why this is wrong and the intended fix shape.
+
+---
+
+### Phase 9 — Source collectors and inbox staging
+
+**Deliverable:** users can pull sources from external systems (Gmail, Google Docs, URLs, Claude chat exports, LinkedIn, etc.) without hand-preparing markdown. Collectors fetch and normalize; staged files land in a new `inbox/` directory for human review before integration.
+
+**Scope:**
+
+- **New workspace directory: `inbox/`.** Staging area for collected-but-not-yet-integrated sources. Unlike `sources/`, `inbox/` is mutable — users rename, edit, or delete before integration. `canon-init` scaffolds it; `integrate-source` moves files out of it into `sources/`.
+- **A collector subagent per source type.** Each:
+  - Has narrowly scoped tools (Read, Write for `inbox/` only, plus whatever MCP or WebFetch it needs).
+  - Authenticates through the relevant MCP server when required.
+  - Fetches items per the user's filter (date range, label, URL, query, doc id).
+  - Converts each fetched item to normalized markdown with YAML frontmatter carrying provenance.
+  - Writes to `inbox/<collector>-<id-or-slug>.md`.
+  - Returns a short pointer summary: `COLLECTED: <N> items in inbox/`.
+- **Starter collector set** (build in this order; add more as appetite grows):
+  - `url-collector` — WebFetch only, no auth, simplest.
+  - `claude-chat-collector` — normalizes Claude chat exports (content is already markdown-ish).
+  - `email-collector` — Gmail MCP (auth handled by MCP server).
+  - `gdoc-collector` — Google Drive MCP.
+- **One command per collector**: `/canon-workspace:collect-url <url>`, `/canon-workspace:collect-gmail --label foo`, etc. Commands are thin wrappers that dispatch the corresponding subagent.
+- **Frontmatter convention** for files in `inbox/` and subsequently `sources/`:
+  ```yaml
+  ---
+  source_type: gmail
+  source_id: <thread-id or stable natural id>
+  source_url: <original URL, when applicable>
+  collected_at: <ISO 8601>
+  original_format: html | docx | plain | markdown | …
+  author: "…"
+  title: "…"
+  ---
+  ```
+  `source-extractor` strips frontmatter before extracting atomic units so the content is clean; the frontmatter remains in `sources/<source_id>.md` post-preservation as provenance.
+- **Optional**: `/canon-workspace:integrate-inbox` — batch command that runs `/integrate-source` over every markdown file in `inbox/` in filename order.
+
+**Design invariants:**
+
+- Collectors **MUST NOT** write to `sources/`, `synthesis.md`, `source-log.md`, `schema-log.md`, or any canon artifact.
+- Collectors **MUST NOT** integrate into the canon themselves — that's `/integrate-source`'s job after human review.
+- Collectors **MUST** normalize to markdown; `sources/` stays markdown-only.
+
+**Tests:**
+
+- `url-collector`: fetch a known URL. Inbox file exists with sensible content and frontmatter.
+- `email-collector`: pull threads by label. Inbox has N markdown files with provenance.
+- End-to-end: collect → review inbox → `/integrate-source inbox/foo.md` → canon reflects the source with frontmatter preserved in `sources/`.
+- Integrate a file with frontmatter — confirm `source-extractor` strips it from extraction content but doesn't error.
+
+**Depends on:** nothing from Phases 2–8. Phase 9 is upstream of the working loop; its outputs feed into `/integrate-source` unchanged. Can be built in parallel with Phases 7 and 8.
 
 ## Out of scope for this plan
 
@@ -163,8 +223,11 @@
 
 ## Build order
 
-Linear: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8.
+Primary path: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8.
+
+**Phase 9 is parallel-eligible** — it has no dependency on Phases 2–8 and can be tackled at any point after v0.7 (Phase 5 complete). Natural candidate for parallel work alongside Phases 7–8.
 
 - After Phase 4 the system is functional end-to-end for a fixed schema.
 - After Phase 6 it's functional with customization + UX.
 - Phases 7–8 add fluent schema/UX evolution on top.
+- Phase 9 closes the input-side gap: users with real corpora (email, URLs, docs) can bring them into the system without manual markdown prep.

@@ -1,12 +1,18 @@
 ---
 name: product-discovery
 title: Product discovery
-description: Converging on what to build from exploratory product conversations — user needs, candidate features, constraints, and risks. Use this when the effort is about product scoping, roadmap thinking, or requirements synthesis.
+description: Converging on what to build from exploratory product conversations — user needs, candidate features, constraints, and risks. Converges on a user-problem-solution triangle with bounded scope. Use when the effort is about product scoping, roadmap thinking, or requirements synthesis.
 ---
 
 ## Schema
 
 This section is the authoritative record of the canon's shape. Subagents read it on every invocation and defer to it; any hardcoded defaults in their system prompts are fallbacks, never overrides. When the schema changes here, subagents pick it up next invocation.
+
+### Convergence target
+
+This canon converges on **a user-problem-solution triangle with bounded scope**. The finished state has 4–6 named elements in `## Core structure`: the core user, the core job to be done, the candidate solution shape, the binding constraints, and the critical risks. A reader can answer "who, what, why, what's the shape, what's in the way" in one paragraph.
+
+*Done is not "every candidate feature is catalogued."* Done is "the user and job are crisply named, the solution shape is coherent, and the constraints and risks that bound it are explicit." A feature list without a named user and job is filing, not synthesis.
 
 ### Kinds (atomic unit taxonomy)
 
@@ -23,6 +29,7 @@ Each atomic unit extracted from a source is classified as one of these kinds:
 `synthesis.md` has these sections, in this order:
 
 - **Overview** — one-paragraph statement of what this canon represents. Populated by the human; not touched by subagents.
+- **Core structure** — the few load-bearing pieces that organize the rest of the canon. A small named set (typically 3–7 elements), each a one-sentence gloss. Populated by the human; `source-extractor` proposes candidates via the extraction JSON and `canon-updater` surfaces them for human promotion. Subagents never write here directly.
 - **User needs** — receives units of kind `need`.
 - **Candidate features** — receives units of kind `feature`.
 - **Constraints** — receives units of kind `constraint`.

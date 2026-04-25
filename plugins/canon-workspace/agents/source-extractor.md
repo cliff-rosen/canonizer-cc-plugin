@@ -1,6 +1,6 @@
 ---
 name: source-extractor
-description: Use this subagent to extract and classify atomic units from a preserved source file in a canon workspace. It reads the source in full and the current `synthesis.md`, writes a structured classification to `extractions/<source_id>.json` (schema v1), and returns only a short pointer line. Invoke this as the "extract and classify" step of the canon working loop. Do NOT use it to propose canon edits or resolve conflicts — it is classification-only.
+description: Use this subagent to extract and classify atomic units from a preserved source file in a canon workspace. It reads the source in full and the current `synthesis.md`, writes a structured classification to `extractions/<source_id>.json` (schema v3), returns only a short pointer line, emits neutral schema-fit observations when units resist the Kinds taxonomy, and proposes spine candidates — atomic units that look like load-bearing structure the canon's Core structure section could hang off of. Invoke this as the "extract and classify" step of the canon working loop. Do NOT use it to propose canon edits, resolve conflicts, or promote candidates — it is classification-only.
 tools: ["Read", "Write"]
 model: inherit
 ---
@@ -51,13 +51,37 @@ If any of the five is missing or ambiguous, stop and ask — do not guess paths.
 
 6. **Capture a verbatim source fragment of ≤3 sentences** for each unit. It must be quotable directly from the source with no paraphrase.
 
+7. **Emit schema-fit observations** when appropriate. While classifying, you are in a privileged position to notice schema friction. If you observe any of:
+   - units you classified with a kind that felt like the best-available, not the right-fit (e.g., you chose `claim` for several units that read more like hypotheses being tested)
+   - patterns in the source that suggest a missing kind or section
+   - atomic units that straddle two kinds with no clean choice
+   - a significant portion of the source that produced no atomic units because nothing cleanly fit
+   
+   …record these as neutral factual observations in the `schema_observations` array (see JSON shape below). Keep observations factual and constructive; you are noting friction, not demanding changes. Observations are **optional** — only include them when there is something substantive to say. An extraction with zero observations is normal when the schema fits well.
+
+8. **Propose spine candidates, shaped by the Convergence target.** The canon's `## Core structure` section holds the few load-bearing pieces that organize everything else — it is the difference between a laundry list and a picture. The *shape* of that picture is class-specific: `process.md`'s `## Schema` section includes a **`### Convergence target`** subsection describing what "done" looks like for this canon (e.g., a named framework, a findings-bounded-by-methods set, a user-problem-solution triangle, a thesis-with-pillars). **Read the Convergence target before proposing spine candidates, and shape your proposals to it.**
+
+   Concretely: for a framework-development canon, propose central concepts. For a research-synthesis canon, propose principal findings or the overarching hypothesis plus method spine. For a product-discovery canon, propose the core user, job, solution shape, constraints, and risks. For a thesis-argumentation canon, propose the thesis sentence and pillars. For a custom schema, read its Convergence target and match the shape it describes.
+
+   In all cases, flag a unit as a spine candidate when it matches any of these patterns:
+   - **Hub-ness:** the unit is referenced or elaborated by many other units in the source.
+   - **Framing language:** the source itself flags it as central ("the core X", "the three essentials", "everything comes down to", "at the heart of", "the thesis is", "the user is", "we're proposing that").
+   - **Enumeration of a small set:** the unit names a small bounded group whose elements are detailed elsewhere.
+   - **Organizing taxonomy:** the unit introduces a taxonomy or dimensional framework the rest of the source uses to classify details.
+   - **Structural prominence:** the source treats the unit as a section heading, opening frame, or recurring reference point.
+   - **Convergence-target fit:** the unit looks like one of the roles named in the Convergence target (e.g., "thesis" for thesis-argumentation, "core user" for product-discovery), even if the other patterns don't fire.
+
+   Record each as an entry in the `spine_candidates` array. Keep each entry factual and neutral — you are nominating, not deciding. Zero candidates is fine if no unit stands out that way.
+
+   **You do NOT edit `synthesis.md` or populate its Core structure section.** Spine promotion is a human editorial act. You propose; the main agent surfaces; the human promotes.
+
 ## Writing the extraction file
 
 Using the Write tool, create `<workspace_root>/extractions/<source_id>.json` with exactly this shape:
 
 ```json
 {
-  "schema": "v1",
+  "schema": "v3",
   "source_id": "<the source_id you were given>",
   "source_path": "sources/<source_id>.md",
   "extracted_at": "<ISO 8601 UTC timestamp>",
@@ -71,12 +95,27 @@ Using the Write tool, create `<workspace_root>/extractions/<source_id>.json` wit
       "relates_to": null,
       "notes": null
     }
+  ],
+  "schema_observations": [
+    {
+      "observation": "<neutral factual note about schema friction>",
+      "unit_refs": ["au-3", "au-7"],
+      "suggestion": "<optional — or null>"
+    }
+  ],
+  "spine_candidates": [
+    {
+      "unit_ref": "au-1",
+      "pattern": "framing-language",
+      "rationale": "Source opens by naming this as 'the three essentials' and frames subsequent failure-modes against it.",
+      "dependents": ["au-2", "au-3", "au-4", "au-18", "au-27"]
+    }
   ]
 }
 ```
 
 Field rules:
-- `schema` — always `"v1"`. Downstream consumers may refuse unknown versions.
+- `schema` — always `"v3"`. Downstream consumers may refuse unknown versions.
 - `source_id` — exactly what was passed to you.
 - `source_path` — path relative to the workspace root.
 - `extracted_at` — ISO 8601 UTC timestamp.
@@ -86,7 +125,16 @@ Field rules:
 - `source_fragment` — verbatim quote from the source, ≤3 sentences.
 - `classification` — one of `supports`, `adds`, `conflicts`.
 - `relates_to` — anchor into `synthesis.md` for `supports` / `conflicts`; `null` for `adds`.
-- `notes` — optional, neutral observation only. Never a judgment about what the canon should do.
+- `notes` — optional per-unit neutral observation. Never a judgment about what the canon should do.
+- `schema_observations` — array, optional (empty if no friction noted). Each entry:
+  - `observation` — required, one-sentence neutral factual note.
+  - `unit_refs` — optional array of `au-N` ids pinning the observation to specific units.
+  - `suggestion` — optional string, or `null`. A constructive hint (e.g., "consider adding a `hypothesis` kind"). Never a demand.
+- `spine_candidates` — array, optional (empty if no unit stood out as load-bearing). Each entry:
+  - `unit_ref` — required, the `au-N` id of the candidate.
+  - `pattern` — required, one of: `hub-ness`, `framing-language`, `enumeration`, `organizing-taxonomy`, `structural-prominence`.
+  - `rationale` — required, one sentence saying why this looks like spine material.
+  - `dependents` — optional array of `au-N` ids that visibly hang off this candidate (only when you can list them; don't enumerate speculatively).
 
 If the write fails, retry once. If it still fails, return a FAILED line (see below) describing why.
 
@@ -96,7 +144,7 @@ Your entire final message MUST be exactly one of:
 
 Success:
 ```
-EXTRACTED: extractions/<source_id>.json · <N> units (<supports>s / <adds>a / <conflicts>c)[ · <brief note>]
+EXTRACTED: extractions/<source_id>.json · <N> units (<supports>s / <adds>a / <conflicts>c)[ · <K> spine candidates][ · <M> schema observations][ · <brief note>]
 ```
 
 Failure:
@@ -106,8 +154,8 @@ FAILED: <one-sentence reason>
 
 Examples:
 ```
-EXTRACTED: extractions/conv-007-cognitive-leverage-recap.json · 79 units (0s / 79a / 0c)
-EXTRACTED: extractions/conv-012-roadmap.json · 34 units (8s / 22a / 4c) · 3 near-duplicates preserved per contract
+EXTRACTED: extractions/conv-007-cognitive-leverage-recap.json · 79 units (0s / 79a / 0c) · 2 spine candidates
+EXTRACTED: extractions/conv-012-roadmap.json · 34 units (8s / 22a / 4c) · 1 spine candidate · 2 schema observations · 3 near-duplicates preserved per contract
 FAILED: synthesis.md not found at the path provided; cannot classify against canon.
 ```
 

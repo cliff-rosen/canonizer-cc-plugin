@@ -1,12 +1,18 @@
 ---
 name: thesis-argumentation
 title: Thesis argumentation
-description: Building a thesis argument — organizing the arguments, the supporting evidence, counter-arguments, and unresolved questions. Use this when the effort is to produce a defensible position, paper, or persuasive document.
+description: Building a thesis argument — organizing the arguments, the supporting evidence, counter-arguments, and unresolved questions. Converges on a thesis with supporting pillars and handled counters. Use when the effort is to produce a defensible position, paper, or persuasive document.
 ---
 
 ## Schema
 
 This section is the authoritative record of the canon's shape. Subagents read it on every invocation and defer to it; any hardcoded defaults in their system prompts are fallbacks, never overrides. When the schema changes here, subagents pick it up next invocation.
+
+### Convergence target
+
+This canon converges on **a thesis with supporting pillars and handled counters**. The finished state has the thesis sentence at the top of `## Core structure`, followed by 3–5 pillars (the independent arguments that support it) and a brief summary of the key counter-arguments addressed. A reader can state the thesis, anticipate its defense, and see which challenges have been engaged.
+
+*Done is not "every argument and piece of evidence is recorded."* Done is "the thesis is sharp, the pillars are named and mutually-reinforcing, and the counter-arguments that could undo the thesis have been surfaced and addressed." Evidence without a spine is filing, not argumentation.
 
 ### Kinds (atomic unit taxonomy)
 
@@ -22,6 +28,7 @@ Each atomic unit extracted from a source is classified as one of these kinds:
 `synthesis.md` has these sections, in this order:
 
 - **Overview** — one-paragraph statement of what this canon represents, including the thesis itself. Populated by the human; not touched by subagents.
+- **Core structure** — the few load-bearing pieces that organize the rest of the canon. A small named set (typically 3–7 elements), each a one-sentence gloss. Populated by the human; `source-extractor` proposes candidates via the extraction JSON and `canon-updater` surfaces them for human promotion. Subagents never write here directly.
 - **Arguments** — receives units of kind `argument`.
 - **Evidence** — receives units of kind `evidence`.
 - **Counter-arguments** — receives units of kind `counter-argument`.
